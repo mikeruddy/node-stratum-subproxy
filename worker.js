@@ -1,13 +1,16 @@
 const EventEmitter = require('events');
-
+const uuidv4 = require('uuid/v4');
 
 class Worker extends EventEmitter {
   constructor(options) {
     super();
+    this.id = uuidv4();
     this.user = '';
     this.diff = options.diff || 0;
     this.agent = '';
     this.connection = options.connection || null;
+    this.job = options.job || null;
+    this.pool = options.pool || null;
   }
 
   connect() {
@@ -31,33 +34,61 @@ class Worker extends EventEmitter {
         this.handleMessageFromMiner(stratumMessage);
       }
     });
-    
-    console.log('connecting worker :)')
   }
 
   handleLogin(data) {
-    let params = data.params;
-    this.user = params.login;
-    
-    this.mockResponse('start');
+    this.user = data.params.login;
+    this.mockResponse('start')
+    this.pool.on("job", this.handleNewJob.bind(this));
   }
   
-  
-  //01018c9bafd6055a44d252caaac864df4c978fdc76e4635bd844ab6c5843dd5df080de5f1add70000000086ca138a39f7b7b43c9797793b449d7fc9e62319a5a023c7c11e766e0520d23d301
-  
   mockResponse(command) {
+    this.job.id = this.id;
+    
+    let start = {
+    	"id": 1,
+    	"jsonrpc": "2.0",
+    	"error": null,
+    	"result": {
+    		"id": this.id,
+    		"job": this.job,
+    		"status": "OK"
+    	}
+    };
+    
     var messages = {
-      start: {"jsonrpc":"2.0","id":1,"error":null,"result":{"id":"860546293256357","status":"OK","job":{"job_id":"1","blob":"01018c9bafd6055a44d252caaac864df4c978fdc76e4635bd844ab6c5843dd5df080de5f1add70000000086ca138a39f7b7b43c9797793b449d7fc9e62319a5a023c7c11e766e0520d23d301","target":"e2530000"}}}
+      start: start
     }
     
+    console.log('miner message', messages.start)
     if(this.connection && this.connection.write) {
-      console.log('TO MINER', command)
       this.connection.write(JSON.stringify(messages[command]) + "\n");
+    } else {
+      console.log('KILLING MINER')
+      this.kill();
+    }
+  }
+  
+  handleNewJob(job) {
+    console.log('miner got new job', job, this.job)
+    this.job = job;
+    this.job.id = this.id;
+    
+    let response = {
+    	"jsonrpc": "2.0",
+    	"method": "job",
+    	"params": this.job
+    };
+    
+    this.messageToMiner(response);
+  }
+  
+  messageToMiner(message) {
+    if(this.connection && this.connection.write) {
+      this.connection.write(JSON.stringify(message) + "\n");
     } else {
       this.kill();
     }
-    
-    
   }
 
   handleMessageFromMiner(message) {
@@ -69,20 +100,30 @@ class Worker extends EventEmitter {
       return;
     }
     
-    console.log('new message', data)
     
     switch(data.method) {
       case "login": {
         this.handleLogin(data);
+        break;
+      }
+      case "submit": {
+        this.handleSubmit(data);
+        break;
       }
     }
-    
-    
-    this.emit("test");
   }
 
-  handleJobFound() {
-
+  handleSubmit(foundJob) {
+    let params = foundJob.params;
+    params.id = this.pool.id;
+    
+    let template = {
+    	"method": "submit",
+    	params,
+    	"id": params.id
+    };
+    
+    this.pool.emit('found', foundJob)
   }
 
   validateJob() {
@@ -98,7 +139,7 @@ class Worker extends EventEmitter {
   }
   
   kill() {
-    console.log('called kill')
+    console.log('called kill', new Error())
   }
 
 }
