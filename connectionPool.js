@@ -1,6 +1,7 @@
 const net = require('net');
 const buffer = require('buffer');
 const EventEmitter = require('events');
+const uuidv4 = require('uuid/v4');
 
 
 class Connection extends EventEmitter {
@@ -11,20 +12,25 @@ class Connection extends EventEmitter {
     this.username = options.username || '';
     this.socket = null;
     this.status = 0;
-    this.id = null;
+    this.id = uuidv4();
+    this.secret = null;
     this.RPCcounter = 1;
     this.job = null;
+    this.jobCheck = [];
     
     this.commands = {
       subscribe: {"id": this.RPCcounter, "method": "mining.extranonce.subscribe", "params": []},
       authorize: {"params": [this.username, "password"], "id": this.RPCcounter, "method": "mining.authorize"},
-      login: {"method":"login","params":{"login":this.username,"pass":"x","agent":"excavator/1.4.4a_nvidia"},"id":this.RPCcounter}
+      login: {"method":"login","params":{"login":this.username,"pass":"x","agent":"excavator/1.4.4a_nvidia"},"id":this.id}
     };
     
-    this.on('found', this.handleFound)
+    this.on('found', this.handleSubmitShare)
   }
   
-  handleFound(job) {
+  handleSubmitShare(job, userId) {
+    job.id = userId;  //use workers UUID to track share submission
+    job.params.id = this.secret;  //use the connections secret ID to submit
+    this.jobCheck[userId] = true; //record which job has been submitted by who
     this.sendToPool(job);
   }
   
@@ -57,8 +63,22 @@ class Connection extends EventEmitter {
       return;
     }
     
+    
     if(message.result && message.result.status === 'OK') {
-      this.id = message.result.id;
+      if(message.id === this.id) {
+        this.secret = message.result.id;
+        console.log('POOL CONNECTED', this.secret);
+      }
+      
+      
+      //share was submitted and server just validated
+      if(message.id && message.result && message.result.status === 'OK') {
+        console.log('SHARE JUST CHECKED', message.id)
+        if(this.jobCheck[message.id]) {
+          this.emit('shareValidated'+message.id)
+          this.jobCheck[message.id] = false;
+        }
+      }
       
       if(message.result.job) {
         this.job = message.result.job;
@@ -78,19 +98,8 @@ class Connection extends EventEmitter {
       }
     }
     
-    
-    
   }
 }
 
 
 module.exports = Connection
-
-
-
-
-
-
-
-
-

@@ -11,6 +11,14 @@ class Worker extends EventEmitter {
     this.connection = options.connection || null;
     this.job = options.job || null;
     this.pool = options.pool || null;
+    
+    this.pool.on("job", this.handleNewJob.bind(this));
+    this.pool.on("shareValidated"+this.id, this.handleShareValidated.bind(this))
+  }
+  
+  
+  handleShareValidated() {
+    this.mockResponse('ok')
   }
 
   connect() {
@@ -39,7 +47,6 @@ class Worker extends EventEmitter {
   handleLogin(data) {
     this.user = data.params.login;
     this.mockResponse('start')
-    this.pool.on("job", this.handleNewJob.bind(this));
   }
   
   mockResponse(command) {
@@ -56,8 +63,11 @@ class Worker extends EventEmitter {
     	}
     };
     
+    let ok = {"id":1,"jsonrpc":"2.0","error":null,"result":{"status":"OK"}}
+    
     var messages = {
-      start: start
+      start: start,
+      ok: ok
     }
     
     console.log('miner message', messages.start)
@@ -70,7 +80,6 @@ class Worker extends EventEmitter {
   }
   
   handleNewJob(job) {
-    console.log('miner got new job', job, this.job)
     this.job = job;
     this.job.id = this.id;
     
@@ -123,10 +132,10 @@ class Worker extends EventEmitter {
     	"id": params.id
     };
     
-    this.pool.emit('found', foundJob)
+    this.pool.emit('found', foundJob, this.id)
   }
 
-  validateJob() {
+  shareValidated() {
 
   }
 
