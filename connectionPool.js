@@ -12,7 +12,7 @@ class Connection extends EventEmitter {
     this.username = options.username || '';
     this.socket = null;
     this.status = 0;
-    this.id = uuidv4();
+    this.id = 1;
     this.secret = null;
     this.RPCcounter = 1;
     this.job = null;

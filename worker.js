@@ -111,10 +111,13 @@ class Worker extends EventEmitter {
       return;
     }
     
-    
+    if(data.id) {
+      this.RPCcounter = data.id;
+    }
+      
+      
     switch(data.method) {
       case "login": {
-        this.RPCcounter = data.id;
         this.handleLogin(data);
         break;
       }
