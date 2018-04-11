@@ -11,6 +11,7 @@ class Worker extends EventEmitter {
     this.connection = options.connection || null;
     this.job = options.job || null;
     this.pool = options.pool || null;
+    this.RPCcounter = 1;
     
     this.pool.on("job", this.handleNewJob.bind(this));
     this.pool.on("shareValidated"+this.id, this.handleShareValidated.bind(this))
@@ -63,7 +64,8 @@ class Worker extends EventEmitter {
     	}
     };
     
-    let ok = {"id":1,"jsonrpc":"2.0","error":null,"result":{"status":"OK"}}
+    let ok = {"id":this.RPCcounter,"jsonrpc":"2.0","error":null,"result":{"status":"OK"}}
+    this.RPCcounter += 1;
     
     var messages = {
       start: start,
@@ -112,11 +114,16 @@ class Worker extends EventEmitter {
     
     switch(data.method) {
       case "login": {
+        this.RPCcounter = data.id;
         this.handleLogin(data);
         break;
       }
       case "submit": {
         this.handleSubmit(data);
+        break;
+      }
+      case "keepalived": {
+        this.mockResponse('ok');
         break;
       }
     }

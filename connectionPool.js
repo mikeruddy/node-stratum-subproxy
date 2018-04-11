@@ -21,7 +21,7 @@ class Connection extends EventEmitter {
     this.commands = {
       subscribe: {"id": this.RPCcounter, "method": "mining.extranonce.subscribe", "params": []},
       authorize: {"params": [this.username, "password"], "id": this.RPCcounter, "method": "mining.authorize"},
-      login: {"method":"login","params":{"login":this.username,"pass":"x","agent":"excavator/1.4.4a_nvidia"},"id":this.id}
+      login: {"method":"login", jsonrpc: "2.0", "params":{"login":this.username,"pass":"x","agent":"hitlist/proxy"},"id":this.id}
     };
     
     this.on('found', this.handleSubmitShare)
