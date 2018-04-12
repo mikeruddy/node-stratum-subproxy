@@ -57,7 +57,7 @@ class Worker extends EventEmitter {
   }
   
   get uniqueJob() {
-    let nonce_range = 50;
+    let nonce_range = 100;
     
     let nonce = (this.pool.nextNonce * nonce_range).toString(16);
     let replaceMe = '00000000';
