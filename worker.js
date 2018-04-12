@@ -20,7 +20,6 @@ class Worker extends EventEmitter {
   handleShareValidated(isValid) {
     if(isValid === false) {
       console.warn('Need to send user warning message here instead');
-      this.handleNewJob();
     }
     
     this.emit('validated', this.user, this.diff);
@@ -58,7 +57,7 @@ class Worker extends EventEmitter {
   }
   
   get uniqueJob() {
-    let nonce_range = 1000;
+    let nonce_range = 10000;
     let nonce = (this.pool.nextNonce * nonce_range).toString(16);
     let replaceMe = '00000000';
     let newJob = replaceMe.slice(0, (replaceMe.length - nonce.length)) + nonce;
@@ -66,14 +65,12 @@ class Worker extends EventEmitter {
     this.job.id = this.id;
     this.job.blob = this.job.blob.replace(replaceMe, newJob);
     
-    console.log(`Nonce is ${nonce}`, newJob);
+    console.log(`Nonce is ${nonce}`, newJob, this.job.blob);
     return this.job;
   }
   
   handleNewJob(job) {
-    if(job) {
-      this.job = JSON.parse(JSON.stringify(job));
-    }
+    this.job = JSON.parse(JSON.stringify(job));
     this.messageToMiner(commands.miner.newJob(this.uniqueJob));
   }
   
