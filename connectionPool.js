@@ -2,7 +2,8 @@ const net = require('net');
 const buffer = require('buffer');
 const EventEmitter = require('events');
 const uuidv4 = require('uuid/v4');
-
+var BigNumber = require('bignumber.js');
+const commands = require('./commands');
 
 class Connection extends EventEmitter {
   constructor(options) {
@@ -15,16 +16,11 @@ class Connection extends EventEmitter {
     this.id = 1;
     this.secret = null;
     this.RPCcounter = 1;
-    this.job = null;
+    this.currentJob = null;
     this.jobCheck = [];
+    this.nonce = 0;
     
-    this.commands = {
-      subscribe: {"id": this.RPCcounter, "method": "mining.extranonce.subscribe", "params": []},
-      authorize: {"params": [this.username, "password"], "id": this.RPCcounter, "method": "mining.authorize"},
-      login: {"method":"login", jsonrpc: "2.0", "params":{"login":this.username,"pass":"x","agent":"hitlist/proxy"},"id":this.id}
-    };
-    
-    this.on('found', this.handleSubmitShare)
+    this.on('found', this.handleSubmitShare.bind(this));
   }
   
   handleSubmitShare(job, userId) {
@@ -34,14 +30,19 @@ class Connection extends EventEmitter {
     this.sendToPool(job);
   }
   
+  get nextNonce() {
+    this.nonce += 1;
+    return this.nonce;
+  }
+  
+  get myJob() {
+    return JSON.parse(JSON.stringify(this.currentJob));
+  }
+  
   connect() {
     this.socket = net.connect(+this.port, this.host);
-    
-    this.socket.on('data', (data) => {
-      this.handlePoolMessage(data);
-    });
-    
-    this.sendToPool(this.commands.login);
+    this.socket.on('data', this.handlePoolMessage.bind(this));
+    this.sendToPool(commands.pool.login(this.username, this.id));
   }
   
   sendToPool(message) {
@@ -51,7 +52,7 @@ class Connection extends EventEmitter {
   }
   
   subscribe() {
-    this.sendToPool(this.commands.subscribe);
+    this.sendToPool(commands.pool.subscribe(this.rpcCount));
   }
   
   handlePoolMessage(data) {
@@ -63,6 +64,16 @@ class Connection extends EventEmitter {
       return;
     }
     
+    if(message.error) {
+      console.error('Error: Probably duplicate share', message);
+    }
+    
+    if(message.id && message.result && message.result.status !== 'OK') {
+        console.error('Error: Probably duplicate share', message);
+        this.emit('shareValidated'+message.id, false);
+        this.emit("job", this.myJob);
+    }
+    
     
     if(message.result && message.result.status === 'OK') {
       if(message.id === this.id) {
@@ -70,30 +81,28 @@ class Connection extends EventEmitter {
         console.log('POOL CONNECTED', this.secret);
       }
       
-      
       //share was submitted and server just validated
       if(message.id && message.result && message.result.status === 'OK') {
-        console.log('SHARE JUST CHECKED', message.id)
         if(this.jobCheck[message.id]) {
           this.emit('shareValidated'+message.id)
           this.jobCheck[message.id] = false;
         }
       }
       
+      //while logging in we got a new job as response
       if(message.result.job) {
-        this.job = message.result.job;
-        this.emit("job", this.job);
+        this.nonce = 0;
+        this.currentJob = message.result.job;
+        this.emit("job", this.myJob);
       }
-      
       return;
     }
     
-    
     switch(message.method) {
       case "job": {
-        console.log('found new job!')
-        this.job = message.params;
-        this.emit("job", this.job);
+        this.nonce = 0;
+        this.currentJob = message.params;
+        this.emit("job", this.myJob);
         break;
       }
     }

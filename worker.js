@@ -1,32 +1,61 @@
 const EventEmitter = require('events');
 const uuidv4 = require('uuid/v4');
+const commands = require('./commands');
 
 class Worker extends EventEmitter {
   constructor(options) {
     super();
-    this.id = uuidv4();
+    this.id = options.id || uuidv4();
     this.user = '';
-    this.diff = options.diff || 0;
+    this.diff = options.diff || 5000;
     this.agent = '';
     this.connection = options.connection || null;
-    this.job = options.job || null;
+    this.job = options.pool.myJob || null;
     this.pool = options.pool || null;
     this.RPCcounter = 1;
     
-    this.pool.on("job", this.handleNewJob.bind(this));
+    this.nonces = [
+      '0A',
+      '0B',
+      '0C',
+      '0D',
+      '0E',
+      '0F',
+      '10',
+      '20',
+      '30',
+      '40',
+      '50',
+      '60',
+      '70',
+      '90',
+      'A1',
+      'AA',
+      'AB',
+      'AC',
+      'AD',
+      'AE',
+      'AF'
+    ];
+    
     this.pool.on("shareValidated"+this.id, this.handleShareValidated.bind(this))
+    this.pool.on("job", this.handleNewJob.bind(this));
   }
   
-  
-  handleShareValidated() {
-    this.mockResponse('ok')
+  handleShareValidated(isValid) {
+    if(isValid === false) {
+      console.warn('Need to send user warning message here instead');
+    }
+    
+    console.log(`${this.user} validated a share @ ${this.diff} diff`);
+    this.emit('validated', this.user, this.diff);
+    this.mockResponse('ok');
   }
 
   connect() {
     this.buffer = '';
     this.connection.setKeepAlive(true);
     this.connection.setEncoding("utf8");
-    
     this.connection.on("error", error => {
       this.kill();
     });
@@ -47,43 +76,42 @@ class Worker extends EventEmitter {
 
   handleLogin(data) {
     this.user = data.params.login;
-    this.mockResponse('start')
+    this.mockResponse('start');
   }
   
   mockResponse(command) {
-    this.job.id = this.id;
-    
-    let start = {
-    	"id": 1,
-    	"jsonrpc": "2.0",
-    	"error": null,
-    	"result": {
-    		"id": this.id,
-    		"job": this.job,
-    		"status": "OK"
-    	}
-    };
-    
-    let ok = {"id":this.RPCcounter,"jsonrpc":"2.0","error":null,"result":{"status":"OK"}}
-    this.RPCcounter += 1;
-    
-    var messages = {
-      start: start,
-      ok: ok
+    if(command === 'start') {
+      if(!this.job) {
+        return;
+      }
+      
+      let nonce = this.nonces[this.pool.nextNonce];
+      this.job.id = this.id;
+      this.job.blob = this.job.blob.replace("00000000", `0000${nonce}${nonce}`);
+      console.log('UPDATE MAGIC NONCE', nonce, this.job.blob);
     }
     
-    console.log('miner message', messages.start)
+    this.RPCcounter += 1;
+    
+    let messages = {
+      start: commands.miner.start(this.id, this.job),
+      ok: commands.miner.ok(this.rpcCount)
+    }
+    
     if(this.connection && this.connection.write) {
       this.connection.write(JSON.stringify(messages[command]) + "\n");
     } else {
-      console.log('KILLING MINER')
       this.kill();
     }
   }
   
   handleNewJob(job) {
-    this.job = job;
+    let nonce = this.nonces[this.pool.nextNonce];
+    this.job = JSON.parse(JSON.stringify(job));
     this.job.id = this.id;
+    this.job.blob = this.job.blob.replace("00000000", `0000${nonce}${nonce}`);
+    
+    console.log('NEW JOB NEW NONCE', nonce, '-----',  this.job.blob);
     
     let response = {
     	"jsonrpc": "2.0",
@@ -107,14 +135,14 @@ class Worker extends EventEmitter {
     try {
       data = JSON.parse(message);
     } catch (e) {
-      console.warn(`can't parse message as JSON from miner:`, message, e.message);
+      console.warn(`can't parse message as JSON from miner ${this.user}:`, message, e.message);
       return;
     }
     
+    //not all clients update the rpc count. adjust accordingly
     if(data.id) {
       this.RPCcounter = data.id;
     }
-      
       
     switch(data.method) {
       case "login": {
@@ -133,6 +161,11 @@ class Worker extends EventEmitter {
   }
 
   handleSubmit(foundJob) {
+    if(!this.shareValidated(foundJob)) {
+      //@TODO handle service abuse and IP banning
+      return;
+    }
+    
     let params = foundJob.params;
     params.id = this.pool.id;
     
@@ -142,11 +175,12 @@ class Worker extends EventEmitter {
     	"id": params.id
     };
     
-    this.pool.emit('found', foundJob, this.id)
+    this.pool.emit('found', template, this.id);
   }
-
+  
+  //@TODO validate shares before submitting
   shareValidated() {
-
+    return true;
   }
 
   handleSendToPool() {
@@ -158,9 +192,9 @@ class Worker extends EventEmitter {
   }
   
   kill() {
-    console.log('called kill', new Error())
+    this.emit('kill', this.id);
+    this.removeAllListeners();
   }
-
 }
 
 module.exports = Worker;

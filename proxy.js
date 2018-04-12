@@ -1,20 +1,18 @@
-const ConnectionPool = require('./connectionPool');
-const Worker = require('./worker');
-
 const net = require('net');
 const buffer = require('buffer');
 const EventEmitter = require('events');
+const uuidv4 = require('uuid/v4');
+
+const ConnectionPool = require('./connectionPool');
+const Worker = require('./worker');
 
 
 class Proxy extends EventEmitter {
   constructor(options) {
     super();
     this.connectionPool = null;
-    this.workers = [];
-    this.job = null;
-    
+    this.workers = {};
     this.listenPort = options.listen || 5588;
-    
     this.poolConfig = {
       host: options.poolHost || 'pool.supportxmr.com',
       port: options.poolPort || 3333,
@@ -30,15 +28,6 @@ class Proxy extends EventEmitter {
   connectToPool() {
     this.connectionPool = new ConnectionPool(this.poolConfig);
     this.connectionPool.connect();
-    this.connectionPool.on("job", this.handleNewJob.bind(this))
-  }
-  
-  handleNewJob(job) {
-    this.job = job;
-    
-    if(this.workers) {
-      this.workers.forEach(worker => worker.emit("job", job));
-    }
   }
   
   listenForMiners() {
@@ -50,13 +39,20 @@ class Proxy extends EventEmitter {
   }
   
   handleConnection(connection) {
+    let id = uuidv4();
     let worker = new Worker({
+      id,
       connection,
-      pool: this.connectionPool,
-      job: this.job
+      pool: this.connectionPool
     });
     worker.connect();
-    this.workers.push(worker);
+    worker.on('validated', (user, diff) => {
+      this.emit('validated', user, diff);
+    })
+    worker.on('kill', (userId) => {
+      delete this.workers[userId];
+    })
+    this.workers[id] = worker;
   }
 }
 
