@@ -1,6 +1,6 @@
 {
-  "name": "stratum-test",
-  "version": "1.0.0",
+  "name": "stratum-subproxy",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {

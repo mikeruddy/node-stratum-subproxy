@@ -9,5 +9,5 @@ let proxy = new Proxy({
 
 proxy.listen();
 proxy.on("validated", function(user, diff) {
-  console.log('Boom. Headshot', user, diff)
+  console.log('Boom. Headshot', user, diff);
 })

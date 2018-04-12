@@ -57,18 +57,17 @@ class Worker extends EventEmitter {
   }
   
   get uniqueJob() {
-    let nonce = this.pool.nextNonce.toString(16);
-    let replaceMe = '0000000';
-    let newJob = replaceMe.slice(0, (replaceMe.length - nonce.length)) + nonce;
+    let nonce_range = 50;
     
+    let nonce = (this.pool.nextNonce * nonce_range).toString(16);
+    let replaceMe = '00000000';
+    let newJob = replaceMe.slice(0, (replaceMe.length - nonce.length)) + nonce;
     
     this.job.id = this.id;
     this.job.blob = this.job.blob.replace(replaceMe, newJob);
     
     
-    console.log('get unique', newJob, this.job.blob);
-    
-    
+    console.log('Unique Job', newJob, this.job.blob)
     return this.job;
   }
   

@@ -64,39 +64,23 @@ class Connection extends EventEmitter {
       return;
     }
     
-    if(message.error && message.id) {
-      console.error('Error: Probably duplicate share', message);
-      this.emit('shareValidated'+message.id, false);
+    if(message.id === this.id) {
+      //Pool just logged in
+      this.secret = message.result.id;
+      this.currentJob = message.result.job;
+      this.emit("job", this.myJob);
     }
     
-    if(message.id && message.result && message.result.status !== 'OK') {
+    if(message.id) {
+      if(message.error) {
         console.error('Error: Probably duplicate share', message);
         this.emit('shareValidated'+message.id, false);
-        this.emit("job", this.myJob);
-    }
-    
-    
-    if(message.result && message.result.status === 'OK') {
-      if(message.id === this.id) {
-        this.secret = message.result.id;
-        console.log('POOL CONNECTED', this.secret);
       }
       
-      //share was submitted and server just validated
-      if(message.id && message.result && message.result.status === 'OK') {
-        if(this.jobCheck[message.id]) {
-          this.emit('shareValidated'+message.id)
-          this.jobCheck[message.id] = false;
-        }
+      if(message.result && message.result.status === 'OK') {
+        this.emit('shareValidated'+message.id)
+        this.jobCheck[message.id] = false;
       }
-      
-      //while logging in we got a new job as response
-      if(message.result.job) {
-        this.nonce = 0;
-        this.currentJob = message.result.job;
-        this.emit("job", this.myJob);
-      }
-      return;
     }
     
     switch(message.method) {
@@ -107,6 +91,8 @@ class Connection extends EventEmitter {
         break;
       }
     }
+    
+    
     
   }
 }
