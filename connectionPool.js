@@ -64,8 +64,9 @@ class Connection extends EventEmitter {
       return;
     }
     
-    if(message.error) {
+    if(message.error && message.id) {
       console.error('Error: Probably duplicate share', message);
+      this.emit('shareValidated'+message.id, false);
     }
     
     if(message.id && message.result && message.result.status !== 'OK') {

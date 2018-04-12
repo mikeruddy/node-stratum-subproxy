@@ -8,6 +8,6 @@ let proxy = new Proxy({
 })
 
 proxy.listen();
-proxy.on("validated", function() {
-  console.log('Boom. Headshot')
+proxy.on("validated", function(user, diff) {
+  console.log('Boom. Headshot', user, diff)
 })

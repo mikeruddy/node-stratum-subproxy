@@ -38,6 +38,13 @@ module.exports = {
       	}
       }
     },
+    newJob: function(jobParams) {
+      return {
+      	"jsonrpc": "2.0",
+      	"method": "job",
+      	"params": jobParams
+      };
+    },
     start: function(id, job) {
       return {
       	"id": 1,

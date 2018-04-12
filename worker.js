@@ -13,31 +13,6 @@ class Worker extends EventEmitter {
     this.job = options.pool.myJob || null;
     this.pool = options.pool || null;
     this.RPCcounter = 1;
-    
-    this.nonces = [
-      '0A',
-      '0B',
-      '0C',
-      '0D',
-      '0E',
-      '0F',
-      '10',
-      '20',
-      '30',
-      '40',
-      '50',
-      '60',
-      '70',
-      '90',
-      'A1',
-      'AA',
-      'AB',
-      'AC',
-      'AD',
-      'AE',
-      'AF'
-    ];
-    
     this.pool.on("shareValidated"+this.id, this.handleShareValidated.bind(this))
     this.pool.on("job", this.handleNewJob.bind(this));
   }
@@ -47,9 +22,8 @@ class Worker extends EventEmitter {
       console.warn('Need to send user warning message here instead');
     }
     
-    console.log(`${this.user} validated a share @ ${this.diff} diff`);
     this.emit('validated', this.user, this.diff);
-    this.mockResponse('ok');
+    this.messageToMiner(commands.miner.ok(this.RPCcounter));
   }
 
   connect() {
@@ -76,53 +50,36 @@ class Worker extends EventEmitter {
 
   handleLogin(data) {
     this.user = data.params.login;
-    this.mockResponse('start');
+    if(this.job) {
+      let startCommand = commands.miner.start(this.id, this.uniqueJob);
+      this.messageToMiner(startCommand);
+    }
   }
   
-  mockResponse(command) {
-    if(command === 'start') {
-      if(!this.job) {
-        return;
-      }
-      
-      let nonce = this.nonces[this.pool.nextNonce];
-      this.job.id = this.id;
-      this.job.blob = this.job.blob.replace("00000000", `0000${nonce}${nonce}`);
-      console.log('UPDATE MAGIC NONCE', nonce, this.job.blob);
-    }
+  get uniqueJob() {
+    let nonce = this.pool.nextNonce.toString(16);
+    let replaceMe = '0000000';
+    let newJob = replaceMe.slice(0, (replaceMe.length - nonce.length)) + nonce;
     
-    this.RPCcounter += 1;
     
-    let messages = {
-      start: commands.miner.start(this.id, this.job),
-      ok: commands.miner.ok(this.rpcCount)
-    }
+    this.job.id = this.id;
+    this.job.blob = this.job.blob.replace(replaceMe, newJob);
     
-    if(this.connection && this.connection.write) {
-      this.connection.write(JSON.stringify(messages[command]) + "\n");
-    } else {
-      this.kill();
-    }
+    
+    console.log('get unique', newJob, this.job.blob);
+    
+    
+    return this.job;
   }
   
   handleNewJob(job) {
-    let nonce = this.nonces[this.pool.nextNonce];
     this.job = JSON.parse(JSON.stringify(job));
-    this.job.id = this.id;
-    this.job.blob = this.job.blob.replace("00000000", `0000${nonce}${nonce}`);
-    
-    console.log('NEW JOB NEW NONCE', nonce, '-----',  this.job.blob);
-    
-    let response = {
-    	"jsonrpc": "2.0",
-    	"method": "job",
-    	"params": this.job
-    };
-    
-    this.messageToMiner(response);
+    this.messageToMiner(commands.miner.newJob(this.job));
   }
   
   messageToMiner(message) {
+    this.RPCcounter += 1;
+    
     if(this.connection && this.connection.write) {
       this.connection.write(JSON.stringify(message) + "\n");
     } else {
@@ -136,6 +93,7 @@ class Worker extends EventEmitter {
       data = JSON.parse(message);
     } catch (e) {
       console.warn(`can't parse message as JSON from miner ${this.user}:`, message, e.message);
+      this.kill();
       return;
     }
     
@@ -154,7 +112,7 @@ class Worker extends EventEmitter {
         break;
       }
       case "keepalived": {
-        this.mockResponse('ok');
+        this.messageToMiner(commands.miner.ok(this.RPCcounter));
         break;
       }
     }
@@ -182,16 +140,9 @@ class Worker extends EventEmitter {
   shareValidated() {
     return true;
   }
-
-  handleSendToPool() {
-
-  }
-
-  handleDisconnect() {
-
-  }
   
   kill() {
+    console.log(`killing connection for ${this.user}`)
     this.emit('kill', this.id);
     this.removeAllListeners();
   }
