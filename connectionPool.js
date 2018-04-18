@@ -2,7 +2,7 @@ const net = require('net');
 const buffer = require('buffer');
 const EventEmitter = require('events');
 const uuidv4 = require('uuid/v4');
-var BigNumber = require('bignumber.js');
+let BigNumber = require('bignumber.js');
 const commands = require('./commands');
 
 class Connection extends EventEmitter {
@@ -88,6 +88,11 @@ class Connection extends EventEmitter {
         this.nonce = 0;
         this.currentJob = message.params;
         this.emit("job", this.myJob);
+        break;
+      }
+      case "keepalived": {
+        console.log('KEEP ALIVE DEBUG ME', new Error())
+        this.secret = message.params.id;
         break;
       }
     }
