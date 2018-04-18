@@ -19,10 +19,11 @@ class Worker extends EventEmitter {
   
   handleShareValidated(isValid) {
     if(isValid === false) {
-      console.warn('Need to send user warning message here instead');
+      //request new job
+      this.messageToMiner(commands.miner.newJob(this.uniqueJob));
+    } else {
+      this.emit('validated', this.user, this.diff);
     }
-    
-    this.emit('validated', this.user, this.diff);
     this.messageToMiner(commands.miner.ok(this.RPCcounter));
   }
 
@@ -31,7 +32,7 @@ class Worker extends EventEmitter {
     this.connection.setKeepAlive(true);
     this.connection.setEncoding("utf8");
     this.connection.on("error", error => {
-      this.kill();
+      // this.kill();
     });
     this.connection.on("close", () => {
       this.kill();
@@ -57,7 +58,7 @@ class Worker extends EventEmitter {
   }
   
   get uniqueJob() {
-    let nonce_range = 10000000;
+    let nonce_range = 1;
     let nonce = (this.pool.nextNonce * nonce_range).toString(16);
     let replaceMe = '00000000';
     let newJob = replaceMe.slice(0, (replaceMe.length - nonce.length)) + nonce;
@@ -140,8 +141,8 @@ class Worker extends EventEmitter {
   
   kill() {
     console.log(`killing connection for ${this.user}`)
-    this.emit('kill', this.id);
     this.removeAllListeners();
+    this.emit('kill', this.id);
   }
 }
 

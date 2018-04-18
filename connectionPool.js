@@ -66,6 +66,7 @@ class Connection extends EventEmitter {
     
     if(message.id === this.id) {
       //Pool just logged in
+      this.nonce = 0;
       this.secret = message.result.id;
       this.currentJob = message.result.job;
       this.emit("job", this.myJob);
@@ -74,6 +75,7 @@ class Connection extends EventEmitter {
     if(message.id) {
       if(message.error) {
         console.error('Error: Probably duplicate share', message);
+        this.sendToPool(commands.pool.login(this.username, this.id));
         this.emit('shareValidated'+message.id, false);
       }
       
@@ -91,13 +93,11 @@ class Connection extends EventEmitter {
         break;
       }
       case "keepalived": {
-        console.log('KEEP ALIVE DEBUG ME', new Error())
+        console.log('KEEP ALIVE DEBUG ME', message.params.id, new Error())
         this.secret = message.params.id;
         break;
       }
     }
-    
-    
     
   }
 }
